@@ -1,0 +1,382 @@
+{
+  "B-2026-001": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-001",
+    "expected_gl_id": "GL-2026-001"
+  },
+  "B-2026-002": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-002",
+    "expected_gl_id": "GL-2026-002"
+  },
+  "B-2026-003": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-003",
+    "expected_gl_id": "GL-2026-003"
+  },
+  "B-2026-004": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-004",
+    "expected_gl_id": "GL-2026-004"
+  },
+  "B-2026-005": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-005",
+    "expected_gl_id": "GL-2026-005"
+  },
+  "B-2026-006": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-006",
+    "expected_gl_id": "GL-2026-006"
+  },
+  "B-2026-007": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-007",
+    "expected_gl_id": "GL-2026-007"
+  },
+  "B-2026-008": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-008",
+    "expected_gl_id": "GL-2026-008"
+  },
+  "B-2026-009": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-009",
+    "expected_gl_id": "GL-2026-009"
+  },
+  "B-2026-010": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-010",
+    "expected_gl_id": "GL-2026-010"
+  },
+  "B-2026-011": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-011",
+    "expected_gl_id": "GL-2026-011"
+  },
+  "B-2026-012": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-012",
+    "expected_gl_id": "GL-2026-012"
+  },
+  "B-2026-013": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-013",
+    "expected_gl_id": "GL-2026-013"
+  },
+  "B-2026-014": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-014",
+    "expected_gl_id": "GL-2026-014"
+  },
+  "B-2026-015": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-015",
+    "expected_gl_id": "GL-2026-015"
+  },
+  "B-2026-016": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-016",
+    "expected_gl_id": "GL-2026-016"
+  },
+  "B-2026-017": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-017",
+    "expected_gl_id": "GL-2026-017"
+  },
+  "B-2026-018": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-018",
+    "expected_gl_id": "GL-2026-018"
+  },
+  "B-2026-019": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-019",
+    "expected_gl_id": "GL-2026-019"
+  },
+  "B-2026-020": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-020",
+    "expected_gl_id": "GL-2026-020"
+  },
+  "B-2026-021": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-021",
+    "expected_gl_id": "GL-2026-021"
+  },
+  "B-2026-022": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-022",
+    "expected_gl_id": "GL-2026-022"
+  },
+  "B-2026-023": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-023",
+    "expected_gl_id": "GL-2026-023"
+  },
+  "B-2026-024": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-024",
+    "expected_gl_id": "GL-2026-024"
+  },
+  "B-2026-025": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-025",
+    "expected_gl_id": "GL-2026-025"
+  },
+  "B-2026-026": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-026",
+    "expected_gl_id": "GL-2026-026"
+  },
+  "B-2026-027": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-027",
+    "expected_gl_id": "GL-2026-027"
+  },
+  "B-2026-028": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-028",
+    "expected_gl_id": "GL-2026-028"
+  },
+  "B-2026-029": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-029",
+    "expected_gl_id": "GL-2026-029"
+  },
+  "B-2026-030": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-030",
+    "expected_gl_id": "GL-2026-030"
+  },
+  "B-2026-031": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-031",
+    "expected_gl_id": "GL-2026-031"
+  },
+  "B-2026-032": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-032",
+    "expected_gl_id": "GL-2026-032"
+  },
+  "B-2026-033": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-033",
+    "expected_gl_id": "GL-2026-033"
+  },
+  "B-2026-034": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-034",
+    "expected_gl_id": "GL-2026-034"
+  },
+  "B-2026-035": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-035",
+    "expected_gl_id": "GL-2026-035"
+  },
+  "B-2026-036": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-036",
+    "expected_gl_id": "GL-2026-036"
+  },
+  "B-2026-037": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-037",
+    "expected_gl_id": "GL-2026-037"
+  },
+  "B-2026-038": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-038",
+    "expected_gl_id": "GL-2026-038"
+  },
+  "B-2026-039": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-039",
+    "expected_gl_id": "GL-2026-039"
+  },
+  "B-2026-040": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-040",
+    "expected_gl_id": "GL-2026-040"
+  },
+  "B-2026-041": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-041",
+    "expected_gl_id": "GL-2026-041"
+  },
+  "B-2026-042": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-042",
+    "expected_gl_id": "GL-2026-042"
+  },
+  "B-2026-043": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-043",
+    "expected_gl_id": "GL-2026-043"
+  },
+  "B-2026-044": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-044",
+    "expected_gl_id": "GL-2026-044"
+  },
+  "B-2026-045": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-045",
+    "expected_gl_id": "GL-2026-045"
+  },
+  "B-2026-046": {
+    "expected_status": "matched_fuzzy",
+    "expected_invoice_id": "INV-2026-046",
+    "expected_gl_id": "GL-2026-046"
+  },
+  "B-2026-047": {
+    "expected_status": "matched_fuzzy",
+    "expected_invoice_id": "INV-2026-047",
+    "expected_gl_id": "GL-2026-047"
+  },
+  "B-2026-048": {
+    "expected_status": "matched_fuzzy",
+    "expected_invoice_id": "INV-2026-048",
+    "expected_gl_id": "GL-2026-048"
+  },
+  "B-2026-049": {
+    "expected_status": "matched_fuzzy",
+    "expected_invoice_id": "INV-2026-049",
+    "expected_gl_id": "GL-2026-049"
+  },
+  "B-2026-050": {
+    "expected_status": "matched_fuzzy",
+    "expected_invoice_id": "INV-2026-050",
+    "expected_gl_id": "GL-2026-050"
+  },
+  "B-2026-051": {
+    "expected_status": "matched_fuzzy",
+    "expected_invoice_id": "INV-2026-051",
+    "expected_gl_id": "GL-2026-051"
+  },
+  "B-2026-052": {
+    "expected_status": "matched_fuzzy",
+    "expected_invoice_id": "INV-2026-052",
+    "expected_gl_id": "GL-2026-052"
+  },
+  "B-2026-053": {
+    "expected_status": "matched_fuzzy",
+    "expected_invoice_id": "INV-2026-053",
+    "expected_gl_id": "GL-2026-053"
+  },
+  "B-2026-054": {
+    "expected_status": "matched_fuzzy",
+    "expected_invoice_id": "INV-2026-054",
+    "expected_gl_id": "GL-2026-054"
+  },
+  "B-2026-055": {
+    "expected_status": "matched_fuzzy",
+    "expected_invoice_id": "INV-2026-055",
+    "expected_gl_id": "GL-2026-055"
+  },
+  "B-2026-056": {
+    "expected_status": "amount_mismatch_tds",
+    "expected_invoice_id": "INV-2026-056",
+    "expected_gl_id": "GL-2026-056"
+  },
+  "B-2026-057": {
+    "expected_status": "amount_mismatch_tds",
+    "expected_invoice_id": "INV-2026-057",
+    "expected_gl_id": "GL-2026-057"
+  },
+  "B-2026-058": {
+    "expected_status": "amount_mismatch_tds",
+    "expected_invoice_id": "INV-2026-058",
+    "expected_gl_id": "GL-2026-058"
+  },
+  "B-2026-059": {
+    "expected_status": "amount_mismatch_tds",
+    "expected_invoice_id": "INV-2026-059",
+    "expected_gl_id": "GL-2026-059"
+  },
+  "B-2026-060": {
+    "expected_status": "amount_mismatch_tds",
+    "expected_invoice_id": "INV-2026-060",
+    "expected_gl_id": "GL-2026-060"
+  },
+  "B-2026-061": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-061",
+    "expected_gl_id": "GL-2026-061"
+  },
+  "B-2026-062": {
+    "expected_status": "duplicate_payment",
+    "expected_invoice_id": "INV-2026-061",
+    "expected_gl_id": null
+  },
+  "B-2026-063": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-062",
+    "expected_gl_id": "GL-2026-062"
+  },
+  "B-2026-064": {
+    "expected_status": "duplicate_payment",
+    "expected_invoice_id": "INV-2026-062",
+    "expected_gl_id": null
+  },
+  "B-2026-065": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-063",
+    "expected_gl_id": "GL-2026-063"
+  },
+  "B-2026-066": {
+    "expected_status": "duplicate_payment",
+    "expected_invoice_id": "INV-2026-063",
+    "expected_gl_id": null
+  },
+  "B-2026-067": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-064",
+    "expected_gl_id": "GL-2026-064"
+  },
+  "B-2026-068": {
+    "expected_status": "duplicate_payment",
+    "expected_invoice_id": "INV-2026-064",
+    "expected_gl_id": null
+  },
+  "B-2026-069": {
+    "expected_status": "missing_invoice",
+    "expected_invoice_id": null,
+    "expected_gl_id": "GL-2026-065"
+  },
+  "B-2026-070": {
+    "expected_status": "missing_gl_entry",
+    "expected_invoice_id": "INV-2026-065",
+    "expected_gl_id": null
+  },
+  "B-2026-071": {
+    "expected_status": "missing_invoice",
+    "expected_invoice_id": null,
+    "expected_gl_id": "GL-2026-066"
+  },
+  "B-2026-072": {
+    "expected_status": "missing_gl_entry",
+    "expected_invoice_id": "INV-2026-066",
+    "expected_gl_id": null
+  },
+  "B-2026-073": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-067",
+    "expected_gl_id": "GL-2026-067"
+  },
+  "B-2026-074": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-068",
+    "expected_gl_id": "GL-2026-068"
+  },
+  "B-2026-075": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-069",
+    "expected_gl_id": "GL-2026-069"
+  },
+  "B-2026-076": {
+    "expected_status": "matched_exact",
+    "expected_invoice_id": "INV-2026-070",
+    "expected_gl_id": "GL-2026-070"
+  }
+}
