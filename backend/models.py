@@ -1,39 +1,58 @@
-from typing import Optional
-from pydantic import BaseModel
+from sqlalchemy import Column, String, Float, Integer, ForeignKey, DateTime
+from sqlalchemy.orm import relationship
+from backend.database import Base
+from datetime import datetime
 
-# Input Models
-class BankTransaction(BaseModel):
-    bank_txn_id: str
-    date: str
-    description: str
-    reference: str
-    amount: float
+class BankTransaction(Base):
+    __tablename__ = "bank_transactions"
+    
+    bank_txn_id = Column(String, primary_key=True, index=True)
+    date = Column(String)
+    description = Column(String)
+    reference = Column(String)
+    amount = Column(Float)
 
-class Invoice(BaseModel):
-    invoice_id: str
-    date: str
-    client_name: str
-    gstin: str
-    gst_rate: int
-    total_amount: float
+class Invoice(Base):
+    __tablename__ = "invoices"
+    
+    invoice_id = Column(String, primary_key=True, index=True)
+    date = Column(String)
+    client_name = Column(String)
+    gstin = Column(String)
+    gst_rate = Column(Integer)
+    total_amount = Column(Float)
 
-class GLRecord(BaseModel):
-    gl_entry_id: str
-    date: str
-    description: str
-    amount: float
-    reference: str
+class GLRecord(Base):
+    __tablename__ = "gl_records"
+    
+    gl_entry_id = Column(String, primary_key=True, index=True)
+    date = Column(String)
+    description = Column(String)
+    amount = Column(Float)
+    reference = Column(String)
 
-# Output Model
-class ReconciliationCase(BaseModel):
-    case_id: str
-    status: str
-    match_method: Optional[str] = None
-    confidence: Optional[float] = None
-    bank_txn_id: str
-    invoice_id: Optional[str] = None
-    gl_entry_id: Optional[str] = None
-    amount_delta: Optional[float] = None
-    date_delta: Optional[int] = None
-    vendor_similarity: Optional[float] = None
-    reason: Optional[str] = None
+class ReconciliationCase(Base):
+    __tablename__ = "reconciliation_cases"
+    
+    case_id = Column(String, primary_key=True, index=True)
+    status = Column(String, index=True)
+    match_method = Column(String, nullable=True)
+    confidence = Column(Float, nullable=True)
+    bank_txn_id = Column(String, unique=True, index=True)
+    invoice_id = Column(String, nullable=True)
+    gl_entry_id = Column(String, nullable=True)
+    amount_delta = Column(Float, nullable=True)
+    date_delta = Column(Integer, nullable=True)
+    vendor_similarity = Column(Float, nullable=True)
+    reason = Column(String, nullable=True)
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    case_id = Column(String, ForeignKey("reconciliation_cases.case_id"))
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    previous_state = Column(String)
+    new_state = Column(String)
+    reason = Column(String)
+    reviewer_name = Column(String)

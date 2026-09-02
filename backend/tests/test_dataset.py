@@ -64,12 +64,12 @@ def test_synthetic_dataset_validation():
     assert duplicate_cases == 4, f"Expected 4 duplicate cases, found {duplicate_cases}"
 
     # Verify specific category counts
-    assert category_counts["matched_fuzzy"] == 11
+    assert category_counts["matched_fuzzy"] == 10
     assert category_counts["amount_mismatch_tds"] + category_counts["amount_mismatch_bank_fee"] == 5
     assert category_counts["duplicate_payment"] == 4
     assert category_counts["missing_invoice"] + category_counts["missing_gl_entry"] == 4
     assert category_counts["matched_exact"] == 45 + 4 + 4
-    assert category_counts["needs_human_review"] == 2
+    assert category_counts["needs_human_review"] == 3
     assert category_counts["unmatched"] == 1
 
     # Every expected counterpart ID exists when required

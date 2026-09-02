@@ -162,14 +162,11 @@ def generate_cases():
         add_case(dt, b_desc, b_ref, amt, dt, name, amt, dt, f"Recv {name}", amt, "matched_exact") # Exact match on UTR and amount
 
     # 7. 4 Adversarial false-positive tests
-    # Case A: Two different vendors have similar names.
-    # Originally expected `needs_human_review`. However, "Singh & Sons Corp" scores 63% on fuzzy match
-    # against "SINGHCORP", falling below the 70% threshold. Thus, the matcher legitimately accepts
-    # "Singh Corp" (71%) as an unambiguous match. The ground truth is updated to "matched_fuzzy".
+    # Case A: Two different vendors have similar names -> needs_human_review
     dt = random_date()
     amt = 12000.00
     b_ref = f"UPI{random.randint(10000000, 99999999)}"
-    b_id, i_id, g_id = add_case(dt, "UPI/SINGHCORP/TRANSFER", b_ref, amt, dt, "Singh Corp", amt, dt, "Recv", amt, "matched_fuzzy")
+    b_id, i_id, g_id = add_case(dt, "UPI/SINGHCORP/TRANSFER", b_ref, amt, dt, "Singh Corp", amt, dt, "Recv", amt, "needs_human_review")
     # Add competing invoice
     invoice_records.append({
         "invoice_id": f"INV-2026-ADV1",

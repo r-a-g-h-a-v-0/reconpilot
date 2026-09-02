@@ -18,13 +18,23 @@ def test_ground_truth_reconciliation_metrics():
         ground_truth = json.load(f)
 
     with open(data_dir / "bank.csv", "r") as f:
-        bank_records = [BankTransaction(**r) for r in csv.DictReader(f)]
+        bank_records = []
+        for r in csv.DictReader(f):
+            r['amount'] = float(r['amount'])
+            bank_records.append(BankTransaction(**r))
 
     with open(data_dir / "invoices.csv", "r") as f:
-        invoice_records = [Invoice(**r) for r in csv.DictReader(f)]
+        invoice_records = []
+        for r in csv.DictReader(f):
+            r['total_amount'] = float(r['total_amount'])
+            r['gst_rate'] = int(r['gst_rate'])
+            invoice_records.append(Invoice(**r))
 
     with open(data_dir / "gl.csv", "r") as f:
-        gl_records = [GLRecord(**r) for r in csv.DictReader(f)]
+        gl_records = []
+        for r in csv.DictReader(f):
+            r['amount'] = float(r['amount'])
+            gl_records.append(GLRecord(**r))
 
     # 2. Run deterministic 3-pass matcher engine
     results = reconcile_records(bank_records, invoice_records, gl_records)
@@ -40,16 +50,17 @@ def test_ground_truth_reconciliation_metrics():
     report_content = (
         f"--- Evaluation Metrics ---\n"
         f"Total Cases: {metrics.total_cases}\n"
+        f"Automatic Decisions: {metrics.automatic_decisions}\n"
+        f"Correct Automatic Decisions: {metrics.correct_automatic_decisions}\n"
+        f"Incorrect Automatic Decisions: {metrics.incorrect_automatic_decisions}\n"
+        f"Automatic Decision Accuracy: {metrics.automatic_decision_accuracy:.2%}\n"
         f"Automatic Matches: {metrics.automatic_matches}\n"
         f"Correct Automatic Matches: {metrics.correct_automatic_matches}\n"
         f"False Automatic Matches: {metrics.false_automatic_matches}\n"
         f"Automatic Match Precision: {metrics.automatic_match_precision:.2%}\n"
-        f"Automatic Decision Accuracy: {metrics.automatic_decision_accuracy:.2%}\n"
         f"Coverage: {metrics.coverage:.2%}\n"
         f"Exception Rate: {metrics.exception_rate:.2%}\n"
         f"Review Rate: {metrics.review_rate:.2%}\n"
-        f"False Match IDs: {', '.join(metrics.false_match_ids) if metrics.false_match_ids else 'None'}\n"
-        f"Unresolved Case IDs: {', '.join(metrics.unresolved_case_ids) if metrics.unresolved_case_ids else 'None'}\n"
     )
     with open(report_file, "w") as f:
         f.write(report_content)
@@ -77,6 +88,6 @@ def test_adversarial_vendor_fuzzy_match_regression():
     results = reconcile_records(bank_records, invoice_records, gl_records)
     case = results[0]
     
-    # Assert it matches the 71% one, not needs_human_review, because the 63% one is below threshold
-    assert case.status == "matched_fuzzy"
-    assert case.invoice_id == "INV-TEST-01"
+    # Assert it requires human review because the top score is 71.4% and the second is 63.1% (margin < 20%)
+    assert case.status == "needs_human_review"
+    assert case.reason == "Ambiguous fuzzy candidates found; automatic matching was blocked."

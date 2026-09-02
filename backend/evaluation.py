@@ -9,11 +9,14 @@ from backend.models import ReconciliationCase
 @dataclass(frozen=True)
 class EvaluationMetrics:
     total_cases: int
+    automatic_decisions: int
+    correct_automatic_decisions: int
+    incorrect_automatic_decisions: int
+    automatic_decision_accuracy: float
     automatic_matches: int
     correct_automatic_matches: int
     false_automatic_matches: int
     automatic_match_precision: float
-    automatic_decision_accuracy: float
     coverage: float
     exception_rate: float
     review_rate: float
@@ -39,8 +42,9 @@ def evaluate_cases(cases: Iterable[ReconciliationCase], ground_truth: Mapping[st
     correct_automatic_matches = 0
     false_automatic_matches = 0
     
-    all_automatic_decisions = 0
+    automatic_decisions = 0
     correct_automatic_decisions = 0
+    incorrect_automatic_decisions = 0
     
     unresolved_exceptions = 0
     human_review_cases = 0
@@ -60,7 +64,8 @@ def evaluate_cases(cases: Iterable[ReconciliationCase], ground_truth: Mapping[st
             human_review_cases += 1
             unresolved_case_ids.append(case.bank_txn_id)
         else:
-            all_automatic_decisions += 1
+            automatic_decisions += 1
+            is_correct_decision = False
             
             if is_automatic_match:
                 automatic_matches += 1
@@ -68,7 +73,7 @@ def evaluate_cases(cases: Iterable[ReconciliationCase], ground_truth: Mapping[st
                 # Check if it's correct
                 if case.status == expected_status and _expected_pair_matches(case, expected):
                     correct_automatic_matches += 1
-                    correct_automatic_decisions += 1
+                    is_correct_decision = True
                 else:
                     false_automatic_matches += 1
                     false_match_ids.append(case.bank_txn_id)
@@ -78,16 +83,24 @@ def evaluate_cases(cases: Iterable[ReconciliationCase], ground_truth: Mapping[st
                 unresolved_case_ids.append(case.bank_txn_id)
                 # Exception correctness
                 if case.status == expected_status:
-                    correct_automatic_decisions += 1
+                    is_correct_decision = True
+            
+            if is_correct_decision:
+                correct_automatic_decisions += 1
+            else:
+                incorrect_automatic_decisions += 1
 
     return EvaluationMetrics(
         total_cases=total_cases,
+        automatic_decisions=automatic_decisions,
+        correct_automatic_decisions=correct_automatic_decisions,
+        incorrect_automatic_decisions=incorrect_automatic_decisions,
+        automatic_decision_accuracy=correct_automatic_decisions / automatic_decisions if automatic_decisions else 0.0,
         automatic_matches=automatic_matches,
         correct_automatic_matches=correct_automatic_matches,
         false_automatic_matches=false_automatic_matches,
         automatic_match_precision=correct_automatic_matches / automatic_matches if automatic_matches else 0.0,
-        automatic_decision_accuracy=correct_automatic_decisions / all_automatic_decisions if all_automatic_decisions else 0.0,
-        coverage=all_automatic_decisions / total_cases if total_cases else 0.0,
+        coverage=automatic_decisions / total_cases if total_cases else 0.0,
         exception_rate=unresolved_exceptions / total_cases if total_cases else 0.0,
         review_rate=human_review_cases / total_cases if total_cases else 0.0,
         false_match_ids=false_match_ids,

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Iterable, List, Optional, Set
 
 from rapidfuzz import fuzz
-from backend.models import BankTransaction, GLRecord, Invoice, ReconciliationCase
+from backend.schemas import BankTransaction, GLRecord, Invoice, ReconciliationCase
 
 MATCH_STATUSES = {"matched_exact", "matched_timing", "matched_fuzzy"}
 
@@ -51,8 +51,8 @@ def reconcile_records(bank_records: List[BankTransaction], invoice_records: List
         date, ref = parse_date(bank.date), clean_reference(bank.reference)
         return [g for g in gl_records if g.gl_entry_id not in used_gls and abs(g.amount-bank.amount) < .01 and abs((date-parse_date(g.date)).days) <= window and (not reference or clean_reference(g.reference) == ref)]
 
-    def vendor_evidence_candidates(bank: BankTransaction, window: int) -> list[Invoice]:
-        """Candidates supported by exact amount, date window, and vendor evidence."""
+    def get_amount_date_candidates(bank: BankTransaction, window: int) -> list[tuple[float, Invoice]]:
+        """Candidate generation and scoring: all invoices matching exact amount and date window."""
         bank_date = parse_date(bank.date)
         vendor = normalize_name(bank_vendor(bank.description))
         candidates = []
@@ -62,9 +62,21 @@ def reconcile_records(bank_records: List[BankTransaction], invoice_records: List
             if abs((bank_date - parse_date(invoice.date)).days) > window:
                 continue
             score = max(fuzz.ratio(vendor, normalize_name(invoice.client_name)), fuzz.token_sort_ratio(vendor, normalize_name(invoice.client_name)))
-            if score >= 70:
-                candidates.append(invoice)
+            candidates.append((score, invoice))
+        candidates.sort(key=lambda x: x[0], reverse=True)
         return candidates
+
+    def is_unambiguous(candidates: list[tuple[float, Invoice]], required_top_score: float = 70.0, min_plausible_score: float = 50.0, min_margin: float = 20.0) -> bool:
+        """Automatic acceptance logic: sufficient evidence AND sufficient separation from competing candidates."""
+        if not candidates:
+            return False
+        if candidates[0][0] < required_top_score:
+            return False
+        if len(candidates) > 1:
+            second_score = candidates[1][0]
+            if second_score >= min_plausible_score and (candidates[0][0] - second_score) < min_margin:
+                return False
+        return True
 
     def accept(bank: BankTransaction, invoice: Invoice, gl: GLRecord, status: str, method: str, score: float, reason: str) -> None:
         used_invoices.add(invoice.invoice_id); used_gls.add(gl.gl_entry_id)
@@ -73,10 +85,10 @@ def reconcile_records(bank_records: List[BankTransaction], invoice_records: List
     # Exact amount, date and vendor.
     for bank in bank_records:
         invoices, gls = invoices_for(bank), gls_for(bank)
-        evidence = vendor_evidence_candidates(bank, 0)
-        if len(invoices) == 1 and len(gls) == 1 and len(evidence) == 1:
+        candidates = get_amount_date_candidates(bank, 0)
+        if len(invoices) == 1 and len(gls) == 1 and is_unambiguous(candidates):
             accept(bank, invoices[0], gls[0], "matched_exact", "exact", 1.0, "Exact amount, date, and normalised vendor match.")
-        elif len(invoices) > 1 or len(gls) > 1 or (len(invoices) == 1 and len(evidence) > 1):
+        elif len(invoices) > 1 or len(gls) > 1 or (len(invoices) == 1 and not is_unambiguous(candidates)):
             outcomes[bank.bank_txn_id] = make_case(bank, "needs_human_review", "Multiple amount, date, and vendor-evidence candidates found; automatic matching was blocked.", match_method="exact", confidence=.5)
 
     # Exact UTR/UPI reference bridges a garbled bank description to the GL.
@@ -94,26 +106,21 @@ def reconcile_records(bank_records: List[BankTransaction], invoice_records: List
     for bank in bank_records:
         if bank.bank_txn_id in outcomes: continue
         invoices, gls = invoices_for(bank, 5), gls_for(bank, 5)
-        evidence = vendor_evidence_candidates(bank, 5)
-        if len(invoices) == 1 and len(gls) == 1 and len(evidence) == 1:
+        candidates = get_amount_date_candidates(bank, 5)
+        if len(invoices) == 1 and len(gls) == 1 and is_unambiguous(candidates):
             accept(bank, invoices[0], gls[0], "matched_timing", "timing", .95, "Exact amount and vendor matched within a five-day settlement window.")
-        elif len(invoices) > 1 or len(gls) > 1 or (len(invoices) == 1 and len(evidence) > 1):
+        elif len(invoices) > 1 or len(gls) > 1 or (len(invoices) == 1 and not is_unambiguous(candidates)):
             outcomes[bank.bank_txn_id] = make_case(bank, "needs_human_review", "Multiple timing candidates found; automatic matching was blocked.", match_method="timing", confidence=.5)
 
     # Fuzzy pass. It still requires exact amount, a five-day window and a unique candidate.
     for bank in bank_records:
         if bank.bank_txn_id in outcomes: continue
-        bank_date, name = parse_date(bank.date), normalize_name(bank_vendor(bank.description))
-        candidates: list[tuple[float, Invoice]] = []
-        for invoice in invoice_records:
-            if invoice.invoice_id in used_invoices or abs(invoice.total_amount-bank.amount) >= .01 or abs((bank_date-parse_date(invoice.date)).days) > 5: continue
-            score = max(fuzz.ratio(name, normalize_name(invoice.client_name)), fuzz.token_sort_ratio(name, normalize_name(invoice.client_name)))
-            if score >= 70: candidates.append((score, invoice))
+        candidates = get_amount_date_candidates(bank, 5)
         gls = gls_for(bank, 5)
-        if len(candidates) == 1 and len(gls) == 1:
+        if len(gls) == 1 and is_unambiguous(candidates):
             score, invoice = candidates[0]
             accept(bank, invoice, gls[0], "matched_fuzzy", "fuzzy", score/100, f"Fuzzy vendor match ({score:.1f}%) within five days; amount matched exactly.")
-        elif len(candidates) > 1 or len(gls) > 1:
+        elif len(gls) > 1 or (len(candidates) > 0 and candidates[0][0] >= 70 and not is_unambiguous(candidates)):
             outcomes[bank.bank_txn_id] = make_case(bank, "needs_human_review", "Ambiguous fuzzy candidates found; automatic matching was blocked.", match_method="fuzzy", confidence=.5)
 
     # Explicit exceptions for all remaining records.
