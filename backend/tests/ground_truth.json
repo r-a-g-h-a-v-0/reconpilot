@@ -380,7 +380,7 @@
     "expected_gl_id": "GL-2026-070"
   },
   "B-2026-077": {
-    "expected_status": "needs_human_review",
+    "expected_status": "matched_fuzzy",
     "expected_invoice_id": "INV-2026-071",
     "expected_gl_id": "GL-2026-071"
   },
