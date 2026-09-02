@@ -37,6 +37,11 @@ class ReconciliationCase(BaseModel):
     date_delta: Optional[int] = None
     vendor_similarity: Optional[float] = None
     reason: Optional[str] = None
+    ai_provider: Optional[str] = None
+    ai_recommendation: Optional[str] = None
+    ai_reason: Optional[str] = None
+    ai_suggested_invoice: Optional[str] = None
+    ai_confidence: Optional[float] = None
 
 class ReviewRequest(BaseModel):
     case_id: str

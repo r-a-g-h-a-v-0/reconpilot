@@ -45,6 +45,13 @@ class ReconciliationCase(Base):
     date_delta = Column(Integer, nullable=True)
     vendor_similarity = Column(Float, nullable=True)
     reason = Column(String, nullable=True)
+    
+    # AI Assistance fields
+    ai_provider = Column(String, nullable=True)
+    ai_recommendation = Column(String, nullable=True)
+    ai_reason = Column(String, nullable=True)
+    ai_suggested_invoice = Column(String, nullable=True)
+    ai_confidence = Column(Float, nullable=True)
 
 class AuditEvent(Base):
     __tablename__ = "audit_events"

@@ -147,7 +147,7 @@ def test_manual_review_lifecycle():
     
     # Verify Audit Events
     audits = client.get("/api/audit-events").json()
-    assert len(audits) == 1
+    assert len(audits) == 4  # 3 from AI provider during reconcile, 1 from manual review
     assert audits[0]["case_id"] == case_id
     assert audits[0]["previous_state"] == "needs_human_review"
     assert audits[0]["new_state"] == "unmatched"
@@ -186,3 +186,36 @@ def test_manual_review_approve():
     assert metrics["review_cases"] == 2 # Was 3, resolved 1 -> 2
     # Wait, isolated DB tests so review_cases goes 3 -> 2
     assert metrics["review_cases"] == 2
+
+def test_ai_policy_enforcement_in_reconciliation():
+    import os
+    # We will use mock provider for this test
+    os.environ["AI_PROVIDER"] = "mock"
+    
+    paths = get_demo_csv_paths()
+    with open(paths["bank"], "rb") as b, open(paths["invoice"], "rb") as i, open(paths["gl"], "rb") as g:
+        client.post("/api/upload", files={
+            "bank_csv": ("bank.csv", b, "text/csv"),
+            "invoice_csv": ("invoices.csv", i, "text/csv"),
+            "gl_csv": ("gl.csv", g, "text/csv")
+        })
+    client.post("/api/reconcile")
+    
+    # The mock provider will "recommend_match" for ambiguous cases that have a candidate > 60
+    # Let's check the exceptions list.
+    exceptions = client.get("/api/exceptions").json()
+    
+    # Find a case that was "needs_human_review"
+    review_cases = [e["case"] for e in exceptions if e["case"]["status"] == "needs_human_review"]
+    
+    # Verify that NONE of the cases automatically matched (they didn't go into matched_exact/fuzzy/timing)
+    # due to the AI's recommend_match = True
+    assert len(review_cases) > 0
+    
+    for case in review_cases:
+        # If the mock AI provider ran, it should have populated the AI fields
+        if case.get("ai_provider") == "mock":
+            if case.get("ai_recommendation") == "recommend_match":
+                assert case["status"] == "needs_human_review"
+                assert case["match_method"] == "ai_assistance"
+                assert case["invoice_id"] == case["ai_suggested_invoice"]

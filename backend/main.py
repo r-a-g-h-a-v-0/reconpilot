@@ -6,10 +6,14 @@ from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import pydantic
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 from backend import models, schemas
 from backend.database import engine, get_db, Base
-from backend.matcher import reconcile_records
+from backend.matcher import reconcile_records, get_candidates_for_bank
+from backend.ai_provider import get_ai_provider
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -93,8 +97,60 @@ def run_reconciliation(db: Session = Depends(get_db)):
 
     cases = reconcile_records(bank_records, invoice_records, gl_records)
 
+    ai_provider = get_ai_provider()
+    
     for c in cases:
-        db.add(models.ReconciliationCase(**c.model_dump()))
+        if c.status == "needs_human_review":
+            bank = next((b for b in bank_records if b.bank_txn_id == c.bank_txn_id), None)
+            if bank:
+                cands = get_candidates_for_bank(bank, invoice_records, window=5)
+                case_info = {
+                    "bank_transaction": {
+                        "date": bank.date,
+                        "description": bank.description,
+                        "amount": bank.amount,
+                        "reference": bank.reference
+                    },
+                    "candidates": [
+                        {"invoice_id": inv.invoice_id, "score": score, "client_name": inv.client_name, "amount": inv.total_amount, "date": inv.date}
+                        for score, inv in cands
+                    ],
+                    "deterministic_reason": c.reason
+                }
+                
+                recommendation = ai_provider.analyze(case_info)
+                
+                # Deterministic Policy Layer
+                c.ai_provider = os.environ.get("AI_PROVIDER", "mock").lower()
+                c.ai_confidence = recommendation.confidence
+                c.ai_reason = recommendation.reason
+                c.ai_recommendation = recommendation.recommendation
+                c.ai_suggested_invoice = recommendation.suggested_invoice_id
+                
+                # Apply policy safely without converting to an automatic match
+                if recommendation.recommendation == "recommend_match":
+                    c.invoice_id = recommendation.suggested_invoice_id
+                    c.match_method = "ai_assistance"
+                    # KEEP status as needs_human_review so human confirms it
+                elif recommendation.recommendation == "reject":
+                    # Reject doesn't silently unmatch
+                    c.match_method = "ai_assistance"
+
+                db.add(models.ReconciliationCase(**c.model_dump()))
+                
+                # Add audit event for AI assistance
+                db.add(models.AuditEvent(
+                    case_id=c.case_id,
+                    previous_state="deterministic_ambiguity",
+                    new_state=c.status,
+                    reason=f"AI Provider ({c.ai_provider}) analyzed: {recommendation.reason}",
+                    reviewer_name="AI System"
+                ))
+            else:
+                db.add(models.ReconciliationCase(**c.model_dump()))
+        else:
+            db.add(models.ReconciliationCase(**c.model_dump()))
+            
     db.commit()
 
     return {

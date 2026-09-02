@@ -37,6 +37,21 @@ def _single(items: Iterable[object]) -> Optional[object]:
     return values[0] if len(values) == 1 else None
 
 
+def get_candidates_for_bank(bank: BankTransaction, invoice_records: List[Invoice], window: int) -> list[tuple[float, Invoice]]:
+    """Candidate generation and scoring: all invoices matching exact amount and date window."""
+    bank_date = parse_date(bank.date)
+    vendor = normalize_name(bank_vendor(bank.description))
+    candidates = []
+    for invoice in invoice_records:
+        if abs(invoice.total_amount - bank.amount) >= .01:
+            continue
+        if abs((bank_date - parse_date(invoice.date)).days) > window:
+            continue
+        score = max(fuzz.ratio(vendor, normalize_name(invoice.client_name)), fuzz.token_sort_ratio(vendor, normalize_name(invoice.client_name)))
+        candidates.append((score, invoice))
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return candidates
+
 def reconcile_records(bank_records: List[BankTransaction], invoice_records: List[Invoice], gl_records: List[GLRecord]) -> List[ReconciliationCase]:
     """Reconcile every bank row. Ambiguity is always routed to review."""
     used_invoices: Set[str] = set()
@@ -52,19 +67,8 @@ def reconcile_records(bank_records: List[BankTransaction], invoice_records: List
         return [g for g in gl_records if g.gl_entry_id not in used_gls and abs(g.amount-bank.amount) < .01 and abs((date-parse_date(g.date)).days) <= window and (not reference or clean_reference(g.reference) == ref)]
 
     def get_amount_date_candidates(bank: BankTransaction, window: int) -> list[tuple[float, Invoice]]:
-        """Candidate generation and scoring: all invoices matching exact amount and date window."""
-        bank_date = parse_date(bank.date)
-        vendor = normalize_name(bank_vendor(bank.description))
-        candidates = []
-        for invoice in invoice_records:
-            if invoice.invoice_id in used_invoices or abs(invoice.total_amount - bank.amount) >= .01:
-                continue
-            if abs((bank_date - parse_date(invoice.date)).days) > window:
-                continue
-            score = max(fuzz.ratio(vendor, normalize_name(invoice.client_name)), fuzz.token_sort_ratio(vendor, normalize_name(invoice.client_name)))
-            candidates.append((score, invoice))
-        candidates.sort(key=lambda x: x[0], reverse=True)
-        return candidates
+        cands = get_candidates_for_bank(bank, invoice_records, window)
+        return [(score, inv) for score, inv in cands if inv.invoice_id not in used_invoices]
 
     def is_unambiguous(candidates: list[tuple[float, Invoice]], required_top_score: float = 70.0, min_plausible_score: float = 50.0, min_margin: float = 20.0) -> bool:
         """Automatic acceptance logic: sufficient evidence AND sufficient separation from competing candidates."""
