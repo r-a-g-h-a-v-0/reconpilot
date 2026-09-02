@@ -132,7 +132,11 @@ export default function Dashboard() {
 
   const handleReview = async (caseId: string, action: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/review?case_id=${caseId}&action=${action}`, { method: "POST" });
+      const res = await fetch(`http://localhost:8000/api/review`, { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ case_id: caseId, action: action, reason: "Manual review from dashboard" })
+      });
       if (!res.ok) throw new Error("Review action failed");
       await fetchDashboard();
     } catch (e: unknown) {
