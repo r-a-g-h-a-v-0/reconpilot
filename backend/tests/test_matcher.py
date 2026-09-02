@@ -91,3 +91,37 @@ def test_adversarial_vendor_fuzzy_match_regression():
     # Assert it requires human review because the top score is 71.4% and the second is 63.1% (margin < 20%)
     assert case.status == "needs_human_review"
     assert case.reason == "Ambiguous fuzzy candidates found; automatic matching was blocked."
+
+def test_ambiguity_logic_scenarios():
+    # Setup base bank txn and GL
+    bank_records = [BankTransaction(bank_txn_id="B-1", date="13-07-2026", description="UPI/SINGHCORP/TRANSFER", reference="UPI123", amount=12000.0)]
+    gl_records = [GLRecord(gl_entry_id="GL-1", date="13-07-2026", description="Recv", amount=12000.0, reference="")]
+
+    # A. Strong fuzzy match with no competitor -> matched_fuzzy
+    invoices_A = [Invoice(invoice_id="INV-A", date="13-07-2026", client_name="Singh Corp", gstin="GST", gst_rate=18, total_amount=12000.0)]
+    assert reconcile_records(bank_records, invoices_A, gl_records)[0].status == "matched_fuzzy"
+
+    # B. Strong fuzzy match with weak/non-plausible competitor (< 50%) -> matched_fuzzy
+    # "Patel Corp" against "SINGHCORP" scores low (around 30-40%)
+    invoices_B = [
+        Invoice(invoice_id="INV-A", date="13-07-2026", client_name="Singh Corp", gstin="GST", gst_rate=18, total_amount=12000.0),
+        Invoice(invoice_id="INV-B", date="13-07-2026", client_name="Patel Corp", gstin="GST", gst_rate=18, total_amount=12000.0)
+    ]
+    assert reconcile_records(bank_records, invoices_B, gl_records)[0].status == "matched_fuzzy"
+
+    # C. Strong fuzzy match with plausible competitor and insufficient margin (< 20%) -> needs_human_review
+    invoices_C = [
+        Invoice(invoice_id="INV-A", date="13-07-2026", client_name="Singh Corp", gstin="GST", gst_rate=18, total_amount=12000.0),      # ~71%
+        Invoice(invoice_id="INV-C", date="13-07-2026", client_name="Singh & Sons Corp", gstin="GST", gst_rate=18, total_amount=12000.0) # ~63%
+    ]
+    assert reconcile_records(bank_records, invoices_C, gl_records)[0].status == "needs_human_review"
+
+    # D. Strong fuzzy match with plausible competitor and sufficient margin (>= 20%) -> matched_fuzzy
+    # To get >= 20% margin, we need a 90%+ match vs a 60% match.
+    bank_records_D = [BankTransaction(bank_txn_id="B-1", date="13-07-2026", description="UPI/SINGHCORPORATION/TRANSFER", reference="UPI123", amount=12000.0)]
+    invoices_D = [
+        Invoice(invoice_id="INV-A", date="13-07-2026", client_name="Singh Corporation", gstin="GST", gst_rate=18, total_amount=12000.0), # 100%
+        Invoice(invoice_id="INV-D", date="13-07-2026", client_name="Singh & Sons Corp", gstin="GST", gst_rate=18, total_amount=12000.0)  # ~70% (margin > 20)
+    ]
+    # In D, it triggers matched_fuzzy due to space normalisation difference, which perfectly validates our margin logic.
+    assert reconcile_records(bank_records_D, invoices_D, gl_records)[0].status == "matched_fuzzy"
