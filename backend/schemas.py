@@ -37,3 +37,8 @@ class ReconciliationCase(BaseModel):
     date_delta: Optional[int] = None
     vendor_similarity: Optional[float] = None
     reason: Optional[str] = None
+
+class ReviewRequest(BaseModel):
+    case_id: str
+    action: str  # "approve" or "reject"
+    reason: str

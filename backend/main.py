@@ -5,11 +5,11 @@ from typing import List, Dict
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+import pydantic
 
 from backend import models, schemas
 from backend.database import engine, get_db, Base
 from backend.matcher import reconcile_records
-# from backend.ai_provider import get_ai_recommendation
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -38,9 +38,8 @@ async def upload_files(
     db: Session = Depends(get_db)
 ):
     """
-    Clears existing data, processes new CSVs, and runs reconciliation.
+    Clears existing data, parses and saves new raw data. DOES NOT run reconciliation.
     """
-    # 1. Clear existing data
     db.query(models.AuditEvent).delete()
     db.query(models.ReconciliationCase).delete()
     db.query(models.BankTransaction).delete()
@@ -48,64 +47,182 @@ async def upload_files(
     db.query(models.GLRecord).delete()
     db.commit()
 
-    # 2. Parse CSVs
     bank_data = _read_csv(bank_csv)
     invoice_data = _read_csv(invoice_csv)
     gl_data = _read_csv(gl_csv)
 
-    bank_records = [schemas.BankTransaction(**row) for row in bank_data]
-    invoice_records = [schemas.Invoice(**row) for row in invoice_data]
-    gl_records = [schemas.GLRecord(**row) for row in gl_data]
+    try:
+        # Use schemas for validation
+        bank_records = [schemas.BankTransaction(**row) for row in bank_data]
+        invoice_records = [schemas.Invoice(**row) for row in invoice_data]
+        gl_records = [schemas.GLRecord(**row) for row in gl_data]
+    except pydantic.ValidationError as e:
+        raise HTTPException(status_code=400, detail=f"CSV Validation Error: {e}")
 
-    # Save to DB
     for r in bank_records: db.add(models.BankTransaction(**r.model_dump()))
     for r in invoice_records: db.add(models.Invoice(**r.model_dump()))
     for r in gl_records: db.add(models.GLRecord(**r.model_dump()))
     db.commit()
 
-    # 3. Run reconciliation engine
+    return {
+        "message": "Upload successful and validated.",
+        "records_uploaded": {
+            "bank": len(bank_records),
+            "invoices": len(invoice_records),
+            "gl": len(gl_records)
+        }
+    }
+
+@app.post("/api/reconcile")
+def run_reconciliation(db: Session = Depends(get_db)):
+    """
+    Runs deterministic matcher over existing DB records and replaces cases.
+    """
+    db.query(models.ReconciliationCase).delete()
+    db.query(models.AuditEvent).delete()
+    db.commit()
+
+    # Raw ORM models aren't directly compatible with reconciliation engine input type hints
+    # but the engine just accesses attributes.
+    bank_records = db.query(models.BankTransaction).all()
+    invoice_records = db.query(models.Invoice).all()
+    gl_records = db.query(models.GLRecord).all()
+    
+    if not bank_records:
+        raise HTTPException(status_code=400, detail="No bank records found. Please upload data first.")
+
     cases = reconcile_records(bank_records, invoice_records, gl_records)
 
-    # Save cases to DB
     for c in cases:
         db.add(models.ReconciliationCase(**c.model_dump()))
     db.commit()
 
-    return {"message": f"Processed {len(bank_records)} bank records, generated {len(cases)} cases."}
+    return {
+        "status": "success",
+        "cases_generated": len(cases)
+    }
 
 @app.get("/api/metrics")
 def get_metrics(db: Session = Depends(get_db)):
+    """
+    Returns operational metrics based on the current state of reconciliation cases.
+    
+    Terminology:
+    - review_cases: Cases explicitly pending human review ("needs_human_review").
+    - review_rate: review_cases / total_cases.
+    - unresolved_exceptions: Cases that are permanently unresolved (e.g. duplicate payments, 
+      missing documents, amount mismatches) or reviews that have been explicitly rejected ("unmatched").
+      This EXCLUDES pending human review and any successfully matched cases.
+    - exception_rate: unresolved_exceptions / total_cases.
+    """
     cases = db.query(models.ReconciliationCase).all()
     total = len(cases)
     if total == 0:
-        return {"accuracy": 0, "coverage": 0, "exception_rate": 0, "review_rate": 0, "total": 0, "bank_count": 0, "invoice_count": 0, "gl_count": 0}
-    
-    review_cases = [c for c in cases if c.status == "needs_human_review"]
+        return {
+            "total_cases": 0,
+            "automatic_decisions": 0,
+            "automatic_matches": 0,
+            "review_cases": 0,
+            "unresolved_exceptions": 0,
+            "coverage": 0.0,
+            "review_rate": 0.0,
+            "exception_rate": 0.0
+        }
+
     auto_decisions = [c for c in cases if c.status != "needs_human_review"]
-    exceptions = [c for c in cases if c.status not in ["matched_exact", "matched_timing", "matched_fuzzy", "needs_human_review"]]
-
-    # We assume all automatic decisions by the deterministic engine are "correct" for the sake of the dashboard metric display
-    correct_auto = len(auto_decisions) 
+    review_cases = [c for c in cases if c.status == "needs_human_review"]
+    auto_matches = [c for c in cases if c.status in ["matched_exact", "matched_timing", "matched_fuzzy"]]
     
-    match_accuracy = correct_auto / len(auto_decisions) if auto_decisions else 0
-    coverage = len(auto_decisions) / total
-    exception_rate = len(exceptions) / total
-    review_rate = len(review_cases) / total
-
-    bank_count = db.query(models.BankTransaction).count()
-    invoice_count = db.query(models.Invoice).count()
-    gl_count = db.query(models.GLRecord).count()
+    unresolved_exception_statuses = [
+        "duplicate_payment", "missing_invoice", "missing_gl_entry",
+        "amount_mismatch_tds", "amount_mismatch_bank_fee", "unmatched"
+    ]
+    exceptions = [c for c in cases if c.status in unresolved_exception_statuses]
 
     return {
-        "accuracy": match_accuracy,
-        "coverage": coverage,
-        "exception_rate": exception_rate,
-        "review_rate": review_rate,
-        "total": total,
-        "bank_count": bank_count,
-        "invoice_count": invoice_count,
-        "gl_count": gl_count
+        "total_cases": total,
+        "automatic_decisions": len(auto_decisions),
+        "automatic_matches": len(auto_matches),
+        "review_cases": len(review_cases),
+        "unresolved_exceptions": len(exceptions),
+        "coverage": len(auto_decisions) / total,
+        "review_rate": len(review_cases) / total,
+        "exception_rate": len(exceptions) / total
     }
+
+@app.get("/api/matches")
+def get_matches(db: Session = Depends(get_db)):
+    match_statuses = ["matched_exact", "matched_timing", "matched_fuzzy", "matched_manual_review"]
+    cases = db.query(models.ReconciliationCase).filter(models.ReconciliationCase.status.in_(match_statuses)).all()
+    results = []
+    for c in cases:
+        bank = db.query(models.BankTransaction).filter(models.BankTransaction.bank_txn_id == c.bank_txn_id).first()
+        invoice = db.query(models.Invoice).filter(models.Invoice.invoice_id == c.invoice_id).first() if c.invoice_id else None
+        gl = db.query(models.GLRecord).filter(models.GLRecord.gl_entry_id == c.gl_entry_id).first() if c.gl_entry_id else None
+        results.append({
+            "case": c,
+            "bank": bank,
+            "invoice": invoice,
+            "gl": gl
+        })
+    return results
+
+@app.get("/api/exceptions")
+def get_exceptions(db: Session = Depends(get_db)):
+    exception_statuses = [
+        "needs_human_review", "duplicate_payment", "missing_invoice", 
+        "missing_gl_entry", "amount_mismatch_tds", "amount_mismatch_bank_fee", "unmatched"
+    ]
+    cases = db.query(models.ReconciliationCase).filter(models.ReconciliationCase.status.in_(exception_statuses)).all()
+    results = []
+    for c in cases:
+        bank = db.query(models.BankTransaction).filter(models.BankTransaction.bank_txn_id == c.bank_txn_id).first()
+        invoice = db.query(models.Invoice).filter(models.Invoice.invoice_id == c.invoice_id).first() if c.invoice_id else None
+        gl = db.query(models.GLRecord).filter(models.GLRecord.gl_entry_id == c.gl_entry_id).first() if c.gl_entry_id else None
+        results.append({
+            "case": c,
+            "bank": bank,
+            "invoice": invoice,
+            "gl": gl
+        })
+    return results
+
+@app.post("/api/review")
+def manual_review(req: schemas.ReviewRequest, db: Session = Depends(get_db)):
+    case = db.query(models.ReconciliationCase).filter(models.ReconciliationCase.case_id == req.case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    
+    if case.status != "needs_human_review":
+        raise HTTPException(status_code=400, detail=f"Case is not pending review. Current status: {case.status}")
+    
+    previous_state = case.status
+    if req.action == "approve":
+        case.status = "matched_manual_review"
+    elif req.action == "reject":
+        case.status = "unmatched"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action")
+    
+    audit = models.AuditEvent(
+        case_id=req.case_id,
+        previous_state=previous_state,
+        new_state=case.status,
+        reason=req.reason,
+        reviewer_name="Demo Accountant"
+    )
+    db.add(audit)
+    db.commit()
+    return {"status": "success", "new_state": case.status}
+
+@app.get("/api/audit-events")
+def get_audit_events(db: Session = Depends(get_db)):
+    events = db.query(models.AuditEvent).order_by(models.AuditEvent.timestamp.desc()).all()
+    return events
+
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok"}
 
 @app.get("/api/cash_position")
 def get_cash_position(db: Session = Depends(get_db)):
@@ -125,42 +242,3 @@ def get_cash_position(db: Session = Depends(get_db)):
         "reconciled_debits": 0,
         "current_balance": opening_balance + reconciled_credits
     }
-
-@app.get("/api/cases")
-def get_cases(db: Session = Depends(get_db)):
-    cases = db.query(models.ReconciliationCase).all()
-    results = []
-    for c in cases:
-        bank = db.query(models.BankTransaction).filter(models.BankTransaction.bank_txn_id == c.bank_txn_id).first()
-        invoice = db.query(models.Invoice).filter(models.Invoice.invoice_id == c.invoice_id).first() if c.invoice_id else None
-        results.append({
-            "case": c,
-            "bank": bank,
-            "invoice": invoice
-        })
-    return results
-
-@app.post("/api/review")
-def manual_review(case_id: str, action: str, db: Session = Depends(get_db)):
-    case = db.query(models.ReconciliationCase).filter(models.ReconciliationCase.case_id == case_id).first()
-    if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
-    
-    previous_state = case.status
-    if action == "approve":
-        case.status = "matched_manual_review"
-    elif action == "reject":
-        case.status = "unmatched"
-    else:
-        raise HTTPException(status_code=400, detail="Invalid action")
-    
-    audit = models.AuditEvent(
-        case_id=case_id,
-        previous_state=previous_state,
-        new_state=case.status,
-        reason=f"Manually {action}d by Demo Accountant",
-        reviewer_name="Demo Accountant"
-    )
-    db.add(audit)
-    db.commit()
-    return {"status": "success", "new_state": case.status}

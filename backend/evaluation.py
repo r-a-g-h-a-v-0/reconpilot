@@ -106,3 +106,52 @@ def evaluate_cases(cases: Iterable[ReconciliationCase], ground_truth: Mapping[st
         false_match_ids=false_match_ids,
         unresolved_case_ids=unresolved_case_ids,
     )
+
+if __name__ == "__main__":
+    import json
+    import csv
+    from pathlib import Path
+    from backend.data_gen import generate_cases
+    from backend.matcher import reconcile_records
+    
+    # 1. Regenerate data
+    generate_cases()
+    
+    # 2. Read the generated CSVs
+    def read_csv(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return list(csv.DictReader(f))
+            
+    bank_data = read_csv("backend/data/bank.csv")
+    invoice_data = read_csv("backend/data/invoices.csv")
+    gl_data = read_csv("backend/data/gl.csv")
+    
+    # Need to convert raw dicts to schemas as reconcile_records expects
+    from backend.schemas import BankTransaction as SBank, Invoice as SInvoice, GLRecord as SGL
+    b = [SBank(**row) for row in bank_data]
+    i = [SInvoice(**row) for row in invoice_data]
+    g = [SGL(**row) for row in gl_data]
+    
+    # 2. Run deterministic matcher directly on generated records
+    results = reconcile_records(b, i, g)
+    
+    # 3. Load ground truth
+    gt_path = Path("backend/tests/ground_truth.json")
+    with open(gt_path) as f:
+        ground_truth = json.load(f)
+        
+    metrics = evaluate_cases(results, ground_truth)
+    
+    print("--- Evaluation Metrics ---")
+    print(f"Total Cases: {metrics.total_cases}")
+    print(f"Automatic Decisions: {metrics.automatic_decisions}")
+    print(f"Correct Automatic Decisions: {metrics.correct_automatic_decisions}")
+    print(f"Incorrect Automatic Decisions: {metrics.incorrect_automatic_decisions}")
+    print(f"Automatic Decision Accuracy: {metrics.automatic_decision_accuracy * 100:.2f}%")
+    print(f"Automatic Matches: {metrics.automatic_matches}")
+    print(f"Correct Automatic Matches: {metrics.correct_automatic_matches}")
+    print(f"False Automatic Matches: {metrics.false_automatic_matches}")
+    print(f"Automatic Match Precision: {metrics.automatic_match_precision * 100:.2f}%")
+    print(f"Coverage: {metrics.coverage * 100:.2f}%")
+    print(f"Exception Rate: {metrics.exception_rate * 100:.2f}%")
+    print(f"Review Rate: {metrics.review_rate * 100:.2f}%")
