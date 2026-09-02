@@ -52,6 +52,14 @@ class ReconciliationCase(Base):
     ai_reason = Column(String, nullable=True)
     ai_suggested_invoice = Column(String, nullable=True)
     ai_confidence = Column(Float, nullable=True)
+    candidates_json = Column(String, nullable=True)
+
+    @property
+    def candidates(self):
+        if self.candidates_json:
+            import json
+            return json.loads(self.candidates_json)
+        return None
 
 class AuditEvent(Base):
     __tablename__ = "audit_events"

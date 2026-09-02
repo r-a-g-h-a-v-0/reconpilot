@@ -1,4 +1,6 @@
 import csv
+import re
+from datetime import datetime
 from io import StringIO
 from typing import List, Dict
 
@@ -29,10 +31,99 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def _read_csv(file: UploadFile) -> List[Dict]:
+BANK_ALIASES = {
+    "bank_txn_id": ["bank_txn_id", "transaction_id", "txn_id"],
+    "date": ["date", "transaction_date", "txn_date", "payment_date", "value_date"],
+    "description": ["description", "narration", "transaction_description", "remarks"],
+    "reference": ["reference", "ref", "utr", "transaction_reference"],
+    "amount": ["amount", "transaction_amount", "txn_amount", "debit_amount", "credit_amount"]
+}
+
+INVOICE_ALIASES = {
+    "invoice_id": ["invoice_id", "invoice_number", "invoice_no", "bill_no"],
+    "date": ["date", "invoice_date", "bill_date"],
+    "client_name": ["client_name", "customer", "customer_name", "vendor", "vendor_name", "party_name"],
+    "gstin": ["gstin", "gst_number", "tax_id"],
+    "gst_rate": ["gst_rate", "tax_rate", "gst_percentage"],
+    "total_amount": ["total_amount", "amount", "invoice_amount", "invoice_value"]
+}
+
+GL_ALIASES = {
+    "gl_entry_id": ["gl_entry_id", "entry_id", "journal_id", "transaction_id"],
+    "date": ["date", "posting_date", "entry_date"],
+    "description": ["description", "narration", "particulars", "remarks"],
+    "amount": ["amount", "transaction_amount", "debit", "credit"],
+    "reference": ["reference", "ref", "document_reference"]
+}
+
+def parse_and_format_date(val: str) -> str:
+    val = val.strip()
+
+    try:
+        datetime.strptime(val, "%d-%m-%Y")
+        return val
+    except ValueError:
+        pass
+
+    m = re.match(r"^(\d{2})[-/](\d{2})[-/]\d{4}$", val)
+    if m:
+        p1, p2 = int(m.group(1)), int(m.group(2))
+        if p1 <= 12 and p2 <= 12 and p1 != p2:
+            raise HTTPException(400, f"Ambiguous date detected: '{val}'. Cannot safely determine day vs month.")
+
+    formats = ["%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d", "%b %d %Y", "%m-%d-%Y"]
+    for fmt in formats:
+        try:
+            d = datetime.strptime(val, fmt)
+            return d.strftime("%d-%m-%Y")
+        except ValueError:
+            pass
+    raise HTTPException(400, f"Invalid or unparseable date: '{val}'. Please use a standard format like YYYY-MM-DD.")
+
+def clean_amount(val: str):
+    cleaned = re.sub(r"[^\d\.-]", "", val)
+    try:
+        return float(cleaned)
+    except ValueError:
+        return val
+
+def normalize_csv(file: UploadFile, aliases: dict) -> List[Dict]:
     content = file.file.read().decode("utf-8")
     reader = csv.DictReader(StringIO(content))
-    return [row for row in reader]
+    raw_headers = reader.fieldnames or []
+
+    header_map = {}
+    for h in raw_headers:
+        norm_h = re.sub(r"[\s\-]+", "_", h.strip().lower())
+        header_map[h] = norm_h
+
+    canonical_map = {}
+    mapped_canonicals = set()
+    for raw_h in raw_headers:
+        norm_h = header_map[raw_h]
+        for canonical, alias_list in aliases.items():
+            if norm_h in alias_list:
+                if canonical in mapped_canonicals and canonical_map.get(raw_h) != canonical:
+                    raise HTTPException(400, f"Ambiguous columns detected: multiple columns map to '{canonical}'.")
+                canonical_map[raw_h] = canonical
+                mapped_canonicals.add(canonical)
+                break
+
+    records = []
+    for row in reader:
+        new_row = {}
+        for raw_h, val in row.items():
+            canonical = canonical_map.get(raw_h)
+            if canonical:
+                v = val.strip() if isinstance(val, str) else val
+                if canonical in ("amount", "total_amount"):
+                    v = clean_amount(v)
+                elif canonical == "date":
+                    v = parse_and_format_date(v)
+                new_row[canonical] = v
+        records.append(new_row)
+
+    return records
 
 @app.post("/api/upload")
 async def upload_files(
@@ -51,9 +142,9 @@ async def upload_files(
     db.query(models.GLRecord).delete()
     db.commit()
 
-    bank_data = _read_csv(bank_csv)
-    invoice_data = _read_csv(invoice_csv)
-    gl_data = _read_csv(gl_csv)
+    bank_data = normalize_csv(bank_csv, BANK_ALIASES)
+    invoice_data = normalize_csv(invoice_csv, INVOICE_ALIASES)
+    gl_data = normalize_csv(gl_csv, GL_ALIASES)
 
     try:
         # Use schemas for validation
@@ -61,7 +152,10 @@ async def upload_files(
         invoice_records = [schemas.Invoice(**row) for row in invoice_data]
         gl_records = [schemas.GLRecord(**row) for row in gl_data]
     except pydantic.ValidationError as e:
-        raise HTTPException(status_code=400, detail=f"CSV Validation Error: {e}")
+        missing_fields = [str(err["loc"][0]) for err in e.errors() if err["type"] == "missing"]
+        if missing_fields:
+            raise HTTPException(status_code=400, detail=f"Missing required field(s): {', '.join(missing_fields)}.")
+        raise HTTPException(status_code=400, detail="CSV Validation Error. Please check column headers and data types.")
 
     for r in bank_records: db.add(models.BankTransaction(**r.model_dump()))
     for r in invoice_records: db.add(models.Invoice(**r.model_dump()))
@@ -91,14 +185,14 @@ def run_reconciliation(db: Session = Depends(get_db)):
     bank_records = db.query(models.BankTransaction).all()
     invoice_records = db.query(models.Invoice).all()
     gl_records = db.query(models.GLRecord).all()
-    
+
     if not bank_records:
         raise HTTPException(status_code=400, detail="No bank records found. Please upload data first.")
 
     cases = reconcile_records(bank_records, invoice_records, gl_records)
 
     ai_provider = get_ai_provider()
-    
+
     for c in cases:
         if c.status == "needs_human_review":
             bank = next((b for b in bank_records if b.bank_txn_id == c.bank_txn_id), None)
@@ -117,16 +211,16 @@ def run_reconciliation(db: Session = Depends(get_db)):
                     ],
                     "deterministic_reason": c.reason
                 }
-                
+
                 recommendation = ai_provider.analyze(case_info)
-                
+
                 # Deterministic Policy Layer
                 c.ai_provider = os.environ.get("AI_PROVIDER", "mock").lower()
                 c.ai_confidence = recommendation.confidence
                 c.ai_reason = recommendation.reason
                 c.ai_recommendation = recommendation.recommendation
                 c.ai_suggested_invoice = recommendation.suggested_invoice_id
-                
+
                 # Apply policy safely without converting to an automatic match
                 if recommendation.recommendation == "recommend_match":
                     c.invoice_id = recommendation.suggested_invoice_id
@@ -136,8 +230,14 @@ def run_reconciliation(db: Session = Depends(get_db)):
                     # Reject doesn't silently unmatch
                     c.match_method = "ai_assistance"
 
-                db.add(models.ReconciliationCase(**c.model_dump()))
-                
+                c_dump = c.model_dump()
+                candidates = c_dump.pop("candidates", None)
+                c_db = models.ReconciliationCase(**c_dump)
+                if candidates is not None:
+                    import json
+                    c_db.candidates_json = json.dumps(candidates)
+                db.add(c_db)
+
                 # Add audit event for AI assistance
                 db.add(models.AuditEvent(
                     case_id=c.case_id,
@@ -147,10 +247,22 @@ def run_reconciliation(db: Session = Depends(get_db)):
                     reviewer_name="AI System"
                 ))
             else:
-                db.add(models.ReconciliationCase(**c.model_dump()))
+                c_dump = c.model_dump()
+                candidates = c_dump.pop("candidates", None)
+                c_db = models.ReconciliationCase(**c_dump)
+                if candidates is not None:
+                    import json
+                    c_db.candidates_json = json.dumps(candidates)
+                db.add(c_db)
         else:
-            db.add(models.ReconciliationCase(**c.model_dump()))
-            
+            c_dump = c.model_dump()
+            candidates = c_dump.pop("candidates", None)
+            c_db = models.ReconciliationCase(**c_dump)
+            if candidates is not None:
+                import json
+                c_db.candidates_json = json.dumps(candidates)
+            db.add(c_db)
+
     db.commit()
 
     return {
@@ -162,11 +274,11 @@ def run_reconciliation(db: Session = Depends(get_db)):
 def get_metrics(db: Session = Depends(get_db)):
     """
     Returns operational metrics based on the current state of reconciliation cases.
-    
+
     Terminology:
     - review_cases: Cases explicitly pending human review ("needs_human_review").
     - review_rate: review_cases / total_cases.
-    - unresolved_exceptions: Cases that are permanently unresolved (e.g. duplicate payments, 
+    - unresolved_exceptions: Cases that are permanently unresolved (e.g. duplicate payments,
       missing documents, amount mismatches) or reviews that have been explicitly rejected ("unmatched").
       This EXCLUDES pending human review and any successfully matched cases.
     - exception_rate: unresolved_exceptions / total_cases.
@@ -188,7 +300,7 @@ def get_metrics(db: Session = Depends(get_db)):
     auto_decisions = [c for c in cases if c.status != "needs_human_review"]
     review_cases = [c for c in cases if c.status == "needs_human_review"]
     auto_matches = [c for c in cases if c.status in ["matched_exact", "matched_timing", "matched_fuzzy"]]
-    
+
     unresolved_exception_statuses = [
         "duplicate_payment", "missing_invoice", "missing_gl_entry",
         "amount_mismatch_tds", "amount_mismatch_bank_fee", "unmatched"
@@ -226,7 +338,7 @@ def get_matches(db: Session = Depends(get_db)):
 @app.get("/api/exceptions")
 def get_exceptions(db: Session = Depends(get_db)):
     exception_statuses = [
-        "needs_human_review", "duplicate_payment", "missing_invoice", 
+        "needs_human_review", "duplicate_payment", "missing_invoice",
         "missing_gl_entry", "amount_mismatch_tds", "amount_mismatch_bank_fee", "unmatched"
     ]
     cases = db.query(models.ReconciliationCase).filter(models.ReconciliationCase.status.in_(exception_statuses)).all()
@@ -248,10 +360,10 @@ def manual_review(req: schemas.ReviewRequest, db: Session = Depends(get_db)):
     case = db.query(models.ReconciliationCase).filter(models.ReconciliationCase.case_id == req.case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
-    
+
     if case.status != "needs_human_review":
         raise HTTPException(status_code=400, detail=f"Case is not pending review. Current status: {case.status}")
-    
+
     previous_state = case.status
     if req.action == "approve":
         case.status = "matched_manual_review"
@@ -259,7 +371,7 @@ def manual_review(req: schemas.ReviewRequest, db: Session = Depends(get_db)):
         case.status = "unmatched"
     else:
         raise HTTPException(status_code=400, detail="Invalid action")
-    
+
     audit = models.AuditEvent(
         case_id=req.case_id,
         previous_state=previous_state,
@@ -286,12 +398,12 @@ def get_cash_position(db: Session = Depends(get_db)):
     cases = db.query(models.ReconciliationCase).filter(
         models.ReconciliationCase.status.in_(["matched_exact", "matched_timing", "matched_fuzzy", "matched_manual_review"])
     ).all()
-    
+
     reconciled_credits = sum(
         db.query(models.BankTransaction.amount).filter(models.BankTransaction.bank_txn_id == c.bank_txn_id).scalar() or 0
         for c in cases
     )
-    
+
     return {
         "opening_balance": opening_balance,
         "reconciled_credits": reconciled_credits,

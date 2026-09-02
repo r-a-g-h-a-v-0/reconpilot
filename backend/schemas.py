@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 
 # Input Models
@@ -24,6 +24,14 @@ class GLRecord(BaseModel):
     amount: float
     reference: str
 
+class Candidate(BaseModel):
+    invoice_id: str
+    client_name: str
+    amount: float
+    date: str
+    similarity_score: float
+    rank: int
+
 # Output Model
 class ReconciliationCase(BaseModel):
     case_id: str
@@ -42,6 +50,7 @@ class ReconciliationCase(BaseModel):
     ai_reason: Optional[str] = None
     ai_suggested_invoice: Optional[str] = None
     ai_confidence: Optional[float] = None
+    candidates: Optional[List[Candidate]] = None
 
 class ReviewRequest(BaseModel):
     case_id: str

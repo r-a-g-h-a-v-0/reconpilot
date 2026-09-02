@@ -4,5 +4,5 @@ sqlalchemy
 python-multipart
 rapidfuzz
 pytest
-google-generativeai
+google-genai
 python-dotenv

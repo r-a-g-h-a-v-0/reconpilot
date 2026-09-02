@@ -125,3 +125,31 @@ def test_ambiguity_logic_scenarios():
     ]
     # In D, it triggers matched_fuzzy due to space normalisation difference, which perfectly validates our margin logic.
     assert reconcile_records(bank_records_D, invoices_D, gl_records)[0].status == "matched_fuzzy"
+
+
+def test_candidate_exposure():
+    """Verify that multiple ambiguous candidates are correctly bundled into the case."""
+    bank = [BankTransaction(bank_txn_id="B1", date="15-08-2026", amount=5000.0, description="Payment /VENDOR", reference="REF1")]
+
+    invoices = [
+        Invoice(invoice_id="I1", date="15-08-2026", client_name="VENDOR", gstin="GST", gst_rate=18, total_amount=5000.0),
+        Invoice(invoice_id="I2", date="15-08-2026", client_name="VENDOR", gstin="GST", gst_rate=18, total_amount=5000.0),
+    ]
+
+    cases = reconcile_records(bank, invoices, [])
+    assert len(cases) == 1
+
+    case = cases[0]
+    assert case.status == "needs_human_review"
+
+    # 2 candidates should be exposed
+    assert case.candidates is not None
+    assert len(case.candidates) == 2
+
+    c1 = case.candidates[0]
+    c2 = case.candidates[1]
+
+    assert c1["invoice_id"] in ("I1", "I2")
+    assert c2["invoice_id"] in ("I1", "I2")
+    assert c1["rank"] == 1
+    assert c2["rank"] == 2

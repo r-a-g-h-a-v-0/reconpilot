@@ -50,9 +50,8 @@ class SafeFailureProvider(AIProvider):
 
 class GeminiAIProvider(AIProvider):
     def __init__(self, api_key: str):
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash', generation_config={"response_mime_type": "application/json"})
+        from google import genai
+        self.client = genai.Client(api_key=api_key)
 
     def analyze(self, case_info: dict) -> AIRecommendation:
         try:
@@ -71,8 +70,14 @@ class GeminiAIProvider(AIProvider):
             Case Info:
             {json.dumps(case_info, indent=2)}
             """
-            import google.generativeai as genai
-            response = self.model.generate_content(prompt)
+            from google import genai
+            response = self.client.models.generate_content(
+                model='gemini-3.8-flash',
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                ),
+            )
             data = json.loads(response.text)
             
             return AIRecommendation(

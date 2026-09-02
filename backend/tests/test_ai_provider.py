@@ -24,31 +24,67 @@ def test_gemini_requires_api_key():
     assert isinstance(provider, SafeFailureProvider)
     assert "missing or invalid" in provider.error_message
 
-@patch("google.generativeai.configure")
-@patch("google.generativeai.GenerativeModel")
-def test_gemini_provider_instantiates(mock_model, mock_configure):
+@patch("google.genai.Client")
+def test_gemini_provider_instantiates(mock_client):
     os.environ["AI_PROVIDER"] = "gemini"
     os.environ["GEMINI_API_KEY"] = "fake-key"
     provider = get_ai_provider()
     assert isinstance(provider, GeminiAIProvider)
-    mock_configure.assert_called_with(api_key="fake-key")
+    mock_client.assert_called_with(api_key="fake-key")
 
-@patch("google.generativeai.configure")
-@patch("google.generativeai.GenerativeModel")
-def test_gemini_malformed_response_fails_safely(mock_model, mock_configure):
+@patch("google.genai.Client")
+def test_gemini_malformed_response_fails_safely(mock_client_class):
     os.environ["AI_PROVIDER"] = "gemini"
     os.environ["GEMINI_API_KEY"] = "fake-key"
+
+    mock_client = MagicMock()
+    mock_client_class.return_value = mock_client
     provider = get_ai_provider()
-    
-    # Mock model generate_content to return malformed JSON
+
     mock_response = MagicMock()
     mock_response.text = "NOT JSON"
-    provider.model.generate_content.return_value = mock_response
-    
+    mock_client.models.generate_content.return_value = mock_response
+
     rec = provider.analyze({"candidates": []})
     assert rec.recommendation == "needs_review"
     assert rec.confidence == 0.0
     assert "invalid response" in rec.reason
+
+@patch("google.genai.Client")
+def test_gemini_valid_structured_response_parsed(mock_client_class):
+    os.environ["AI_PROVIDER"] = "gemini"
+    os.environ["GEMINI_API_KEY"] = "fake-key"
+
+    mock_client = MagicMock()
+    mock_client_class.return_value = mock_client
+    provider = get_ai_provider()
+
+    mock_response = MagicMock()
+    mock_response.text = '{"recommendation": "recommend_match", "confidence": 0.85, "reason": "Looks good", "suggested_invoice_id": "INV-123", "evidence_used": ["date"]}'
+    mock_client.models.generate_content.return_value = mock_response
+
+    rec = provider.analyze({"candidates": []})
+    assert rec.recommendation == "recommend_match"
+    assert rec.confidence == 0.85
+    assert rec.suggested_invoice_id == "INV-123"
+
+@patch("google.genai.Client")
+def test_gemini_invalid_recommendation_value(mock_client_class):
+    os.environ["AI_PROVIDER"] = "gemini"
+    os.environ["GEMINI_API_KEY"] = "fake-key"
+
+    mock_client = MagicMock()
+    mock_client_class.return_value = mock_client
+    provider = get_ai_provider()
+
+    mock_response = MagicMock()
+    mock_response.text = '{"recommendation": "do_it", "confidence": "high", "reason": "why not"}'
+    mock_client.models.generate_content.return_value = mock_response
+
+    rec = provider.analyze({"candidates": []})
+    assert rec.recommendation == "needs_review"
+    assert rec.confidence == 0.0
+    assert "error or invalid response" in rec.reason
 
 def test_mock_provider_generates_schema():
     provider = MockAIProvider()

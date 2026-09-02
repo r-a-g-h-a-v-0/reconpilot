@@ -1,4 +1,5 @@
 """Deterministic, explainable reconciliation for ReconPilot."""
+import json
 import re
 from datetime import datetime
 from typing import Iterable, List, Optional, Set
@@ -29,7 +30,11 @@ def clean_reference(value: str) -> str:
 
 
 def make_case(bank: BankTransaction, status: str, reason: str, **values: object) -> ReconciliationCase:
-    return ReconciliationCase(case_id=f"CASE-{bank.bank_txn_id}", bank_txn_id=bank.bank_txn_id, status=status, reason=reason, **values)
+    candidates_list = values.pop("candidates_list", None)
+    case = ReconciliationCase(case_id=f"CASE-{bank.bank_txn_id}", bank_txn_id=bank.bank_txn_id, status=status, reason=reason, **values)
+    if candidates_list is not None:
+        case.candidates = candidates_list
+    return case
 
 
 def _single(items: Iterable[object]) -> Optional[object]:
@@ -82,18 +87,31 @@ def reconcile_records(bank_records: List[BankTransaction], invoice_records: List
                 return False
         return True
 
-    def accept(bank: BankTransaction, invoice: Invoice, gl: GLRecord, status: str, method: str, score: float, reason: str) -> None:
+    def to_candidate_dicts(candidates: list[tuple[float, Invoice]]) -> list[dict]:
+        return [
+            {
+                "invoice_id": inv.invoice_id,
+                "client_name": inv.client_name,
+                "amount": inv.total_amount,
+                "date": inv.date,
+                "similarity_score": round(score, 1),
+                "rank": idx + 1
+            }
+            for idx, (score, inv) in enumerate(candidates)
+        ]
+
+    def accept(bank: BankTransaction, invoice: Invoice, gl: GLRecord, status: str, method: str, score: float, reason: str, cands: list[dict] = None) -> None:
         used_invoices.add(invoice.invoice_id); used_gls.add(gl.gl_entry_id)
-        outcomes[bank.bank_txn_id] = make_case(bank, status, reason, match_method=method, confidence=score, invoice_id=invoice.invoice_id, gl_entry_id=gl.gl_entry_id, amount_delta=round(bank.amount-invoice.total_amount,2), date_delta=abs((parse_date(bank.date)-parse_date(invoice.date)).days), vendor_similarity=score)
+        outcomes[bank.bank_txn_id] = make_case(bank, status, reason, match_method=method, confidence=score, invoice_id=invoice.invoice_id, gl_entry_id=gl.gl_entry_id, amount_delta=round(bank.amount-invoice.total_amount,2), date_delta=abs((parse_date(bank.date)-parse_date(invoice.date)).days), vendor_similarity=score, candidates_list=cands)
 
     # Exact amount, date and vendor.
     for bank in bank_records:
         invoices, gls = invoices_for(bank), gls_for(bank)
         candidates = get_amount_date_candidates(bank, 0)
         if len(invoices) == 1 and len(gls) == 1 and is_unambiguous(candidates):
-            accept(bank, invoices[0], gls[0], "matched_exact", "exact", 1.0, "Exact amount, date, and normalised vendor match.")
+            accept(bank, invoices[0], gls[0], "matched_exact", "exact", 1.0, "Exact amount, date, and normalised vendor match.", to_candidate_dicts(candidates))
         elif len(invoices) > 1 or len(gls) > 1 or (len(invoices) == 1 and not is_unambiguous(candidates)):
-            outcomes[bank.bank_txn_id] = make_case(bank, "needs_human_review", "Multiple amount, date, and vendor-evidence candidates found; automatic matching was blocked.", match_method="exact", confidence=.5)
+            outcomes[bank.bank_txn_id] = make_case(bank, "needs_human_review", "Multiple amount, date, and vendor-evidence candidates found; automatic matching was blocked.", match_method="exact", confidence=.5, candidates_list=to_candidate_dicts(candidates))
 
     # Exact UTR/UPI reference bridges a garbled bank description to the GL.
     for bank in bank_records:
@@ -112,9 +130,9 @@ def reconcile_records(bank_records: List[BankTransaction], invoice_records: List
         invoices, gls = invoices_for(bank, 5), gls_for(bank, 5)
         candidates = get_amount_date_candidates(bank, 5)
         if len(invoices) == 1 and len(gls) == 1 and is_unambiguous(candidates):
-            accept(bank, invoices[0], gls[0], "matched_timing", "timing", .95, "Exact amount and vendor matched within a five-day settlement window.")
+            accept(bank, invoices[0], gls[0], "matched_timing", "timing", .95, "Exact amount and vendor matched within a five-day settlement window.", to_candidate_dicts(candidates))
         elif len(invoices) > 1 or len(gls) > 1 or (len(invoices) == 1 and not is_unambiguous(candidates)):
-            outcomes[bank.bank_txn_id] = make_case(bank, "needs_human_review", "Multiple timing candidates found; automatic matching was blocked.", match_method="timing", confidence=.5)
+            outcomes[bank.bank_txn_id] = make_case(bank, "needs_human_review", "Multiple timing candidates found; automatic matching was blocked.", match_method="timing", confidence=.5, candidates_list=to_candidate_dicts(candidates))
 
     # Fuzzy pass. It still requires exact amount, a five-day window and a unique candidate.
     for bank in bank_records:
@@ -123,9 +141,9 @@ def reconcile_records(bank_records: List[BankTransaction], invoice_records: List
         gls = gls_for(bank, 5)
         if len(gls) == 1 and is_unambiguous(candidates):
             score, invoice = candidates[0]
-            accept(bank, invoice, gls[0], "matched_fuzzy", "fuzzy", score/100, f"Fuzzy vendor match ({score:.1f}%) within five days; amount matched exactly.")
+            accept(bank, invoice, gls[0], "matched_fuzzy", "fuzzy", score/100, f"Fuzzy vendor match ({score:.1f}%) within five days; amount matched exactly.", to_candidate_dicts(candidates))
         elif len(gls) > 1 or (len(candidates) > 0 and candidates[0][0] >= 70 and not is_unambiguous(candidates)):
-            outcomes[bank.bank_txn_id] = make_case(bank, "needs_human_review", "Ambiguous fuzzy candidates found; automatic matching was blocked.", match_method="fuzzy", confidence=.5)
+            outcomes[bank.bank_txn_id] = make_case(bank, "needs_human_review", "Ambiguous fuzzy candidates found; automatic matching was blocked.", match_method="fuzzy", confidence=.5, candidates_list=to_candidate_dicts(candidates))
 
     # Explicit exceptions for all remaining records.
     for bank in bank_records:
