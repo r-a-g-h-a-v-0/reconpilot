@@ -142,6 +142,24 @@ async def upload_files(
     db.query(models.GLRecord).delete()
     db.commit()
 
+    data_dir = os.getenv("DATA_DIR", "./backend/data")
+    os.makedirs(data_dir, exist_ok=True)
+
+    bank_content = bank_csv.file.read()
+    invoice_content = invoice_csv.file.read()
+    gl_content = gl_csv.file.read()
+
+    with open(os.path.join(data_dir, "uploaded_bank.csv"), "wb") as f:
+        f.write(bank_content)
+    with open(os.path.join(data_dir, "uploaded_invoice.csv"), "wb") as f:
+        f.write(invoice_content)
+    with open(os.path.join(data_dir, "uploaded_gl.csv"), "wb") as f:
+        f.write(gl_content)
+
+    bank_csv.file.seek(0)
+    invoice_csv.file.seek(0)
+    gl_csv.file.seek(0)
+
     bank_data = normalize_csv(bank_csv, BANK_ALIASES)
     invoice_data = normalize_csv(invoice_csv, INVOICE_ALIASES)
     gl_data = normalize_csv(gl_csv, GL_ALIASES)
