@@ -1,0 +1,11 @@
+--- Evaluation Metrics ---
+Total Cases: 80
+Match Accuracy: 98.44%
+Coverage: 97.50%
+Exception Rate: 17.50%
+Review Rate: 2.50%
+Correct Automatic Matches: 63
+False Automatic Matches: 1
+Correct Exceptions: 14
+Missed Matches: 0
+Cases Sent to Human Review: 2

@@ -1,6 +1,7 @@
 import csv
 import json
 import random
+import re
 import uuid
 from datetime import datetime, timedelta
 
@@ -87,23 +88,24 @@ def generate_cases():
         name = random.choice(INDIAN_NAMES)
         b_ref = f"UPI{random.randint(10000000, 99999999)}"
         # Mangle name slightly
-        mangled_name = name.replace(" ", "").upper()
+        # Remove separators as they appear in compact UPI descriptions.  This
+        # deliberately prevents punctuation-only normalisation from turning a
+        # fuzzy case (for example, "MEHTA&CO") into an exact vendor match.
+        mangled_name = re.sub(r"[^A-Za-z0-9]", "", name).upper()
         b_desc = f"UPI/{mangled_name}/TRANSFER"
         add_case(b_dt, b_desc, b_ref, amt, dt, name, amt, b_dt, f"Payment {name}", amt, "matched_fuzzy")
 
     # 3. 5 TDS or bank fee amount mismatches (Bank amount < Invoice amount)
-    for _ in range(5):
+    for idx in range(5):
         dt = random_date()
         inv_amt = round(random.uniform(10000, 30000), 2)
-        # 10% TDS or small bank fee
-        is_tds = random.choice([True, False])
-        if is_tds:
-            b_amt = inv_amt * 0.90
+        # Ensure a mix: first 4 are TDS, last one is bank fee
+        if idx < 4:
+            b_amt = round(inv_amt * 0.90, 2)
             expected_status = "amount_mismatch_tds"
         else:
-            b_amt = inv_amt - 59.0  # ₹50 + 18% GST fee
+            b_amt = round(inv_amt - 59.0, 2)  # ₹59 fee
             expected_status = "amount_mismatch_bank_fee"
-            
         name = random.choice(INDIAN_NAMES)
         b_ref = f"IMPS{random.randint(10000000, 99999999)}"
         add_case(dt, f"IMPS/{name}", b_ref, b_amt, dt, name, inv_amt, dt, f"Recv {name}", b_amt, expected_status)
@@ -159,7 +161,57 @@ def generate_cases():
         b_desc = f"NEFT/RAMESH KUMAR/PAYMENT"
         add_case(dt, b_desc, b_ref, amt, dt, name, amt, dt, f"Recv {name}", amt, "matched_exact") # Exact match on UTR and amount
 
-    # Total bank cases: 45 + 10 + 5 + 4 + 4 + 4 = 72
+    # 7. 4 Adversarial false-positive tests
+    # Case A: Two different vendors have similar names -> needs_human_review
+    dt = random_date()
+    amt = 12000.00
+    b_ref = f"UPI{random.randint(10000000, 99999999)}"
+    b_id, i_id, g_id = add_case(dt, "UPI/SINGHCORP/TRANSFER", b_ref, amt, dt, "Singh Corp", amt, dt, "Recv", amt, "needs_human_review")
+    # Add competing invoice
+    invoice_records.append({
+        "invoice_id": f"INV-2026-ADV1",
+        "date": format_date(dt),
+        "client_name": "Singh & Sons Corp",
+        "gstin": "27AAAAA0000A1Z5",
+        "gst_rate": 18,
+        "total_amount": amt
+    })
+    
+    # Case B: Same amount and close date belong to different vendors -> needs_human_review
+    dt = random_date()
+    amt = 8500.00
+    b_ref = f"IMPS{random.randint(10000000, 99999999)}"
+    b_id, i_id, g_id = add_case(dt, "IMPS/UNKNOWN/TRANSFER", b_ref, amt, dt, "Mehta & Co", amt, dt, "Recv", amt, "needs_human_review")
+    invoice_records.append({
+        "invoice_id": f"INV-2026-ADV2",
+        "date": format_date(dt + timedelta(days=1)),
+        "client_name": "Kapur Industries",
+        "gstin": "27AAAAA0000A1Z5",
+        "gst_rate": 18,
+        "total_amount": amt
+    })
+    
+    # Case C: Similar vendor name has a materially different amount -> unmatched
+    dt = random_date()
+    amt = 5000.00
+    b_ref = f"UPI{random.randint(10000000, 99999999)}"
+    b_id, i_id, g_id = add_case(dt, "UPI/GUPTALOGISTICS/TRANSFER", b_ref, amt, dt, "Gupta Logistics", 9000.00, dt, "Recv", 9000.00, "unmatched")
+    
+    # Case D: Duplicate invoice competes with the correct invoice -> needs_human_review
+    dt = random_date()
+    amt = 7000.00
+    b_ref = f"RTGS{random.randint(10000000, 99999999)}"
+    b_id, i_id, g_id = add_case(dt, "RTGS/REDDYTECH/TRANSFER", b_ref, amt, dt, "Reddy Tech", amt, dt, "Recv", amt, "needs_human_review")
+    invoice_records.append({
+        "invoice_id": f"INV-2026-ADV4",
+        "date": format_date(dt),
+        "client_name": "Reddy Tech",
+        "gstin": "27AAAAA0000A1Z5",
+        "gst_rate": 18,
+        "total_amount": amt
+    })
+
+    # Total bank cases: 45 + 10 + 5 + 8 (four duplicate pairs) + 4 + 4 + 4 = 80
     
     with open('backend/data/bank.csv', 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=["bank_txn_id", "date", "description", "reference", "amount"])
@@ -179,7 +231,7 @@ def generate_cases():
     with open('backend/tests/ground_truth.json', 'w') as f:
         json.dump(ground_truth, f, indent=2)
 
-    print(f"Generated 72 bank cases successfully.")
+    print(f"Generated 80 bank cases successfully.")
     print(f"Bank records: {len(bank_records)}")
     print(f"Invoice records: {len(invoice_records)}")
     print(f"GL records: {len(gl_records)}")

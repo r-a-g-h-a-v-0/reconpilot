@@ -295,7 +295,7 @@
     "expected_gl_id": "GL-2026-059"
   },
   "B-2026-060": {
-    "expected_status": "amount_mismatch_tds",
+    "expected_status": "amount_mismatch_bank_fee",
     "expected_invoice_id": "INV-2026-060",
     "expected_gl_id": "GL-2026-060"
   },
@@ -378,5 +378,25 @@
     "expected_status": "matched_exact",
     "expected_invoice_id": "INV-2026-070",
     "expected_gl_id": "GL-2026-070"
+  },
+  "B-2026-077": {
+    "expected_status": "needs_human_review",
+    "expected_invoice_id": "INV-2026-071",
+    "expected_gl_id": "GL-2026-071"
+  },
+  "B-2026-078": {
+    "expected_status": "needs_human_review",
+    "expected_invoice_id": "INV-2026-072",
+    "expected_gl_id": "GL-2026-072"
+  },
+  "B-2026-079": {
+    "expected_status": "unmatched",
+    "expected_invoice_id": "INV-2026-073",
+    "expected_gl_id": "GL-2026-073"
+  },
+  "B-2026-080": {
+    "expected_status": "needs_human_review",
+    "expected_invoice_id": "INV-2026-074",
+    "expected_gl_id": "GL-2026-074"
   }
 }
