@@ -16,6 +16,16 @@ Fully deterministic systems fail at ambiguous cases, leading to low match rates.
 
 Gemini can recommend a candidate and provide evidence, but it cannot directly create statuses like `matched_exact`, `matched_timing`, or `matched_fuzzy`. AI-assisted recommendations remain firmly in a `needs_human_review` state until an accountant explicitly approves them.
 
+## Feature Showcase
+* **Dashboard Overview:** Real-time visibility into operational metrics and cash position.
+  <br>![Dashboard Overview](docs/screenshots/overview.png)
+* **Reconciliation Engine:** Seamlessly process Bank, Invoice, and GL CSVs with deterministic accuracy.
+  <br>![Data Upload](docs/screenshots/upload.png)
+* **Exception Management & AI Advisory:** Gemini AI evaluates ambiguous matches and provides clear, justifiable recommendations.
+  <br>![AI Advisory](docs/screenshots/ai_advisory.png)
+* **Audit Trail:** Immutable logging of all accountant decisions ensuring full compliance and accountability.
+  <br>![Audit Trail](docs/screenshots/audit_trail.png)
+
 ## Architecture
 
 ```mermaid
@@ -83,14 +93,16 @@ python -m backend.data_gen
 ```
 This generates `bank.csv`, `invoices.csv`, and `gl.csv` in the `backend/data/` directory.
 
-## Demo Walkthrough / Buildathon Narrative
-1. **Upload Data:** Upload the synthetic `bank.csv`, `invoices.csv`, and `gl.csv` via the dashboard.
-2. **Run Reconciliation:** The deterministic engine automatically handles clear matches and escalates exceptions.
-3. **Review Exceptions:** Ambiguous cases are shown to the accountant, with AI providing intelligent suggestions and evidence.
-4. **Human Review:** The accountant evaluates the AI suggestion. AI does *not* finalize the accounting decision.
-5. **Approve/Reject:** The accountant clicks "Approve" or "Reject", changing the status to `matched_manual_review` or `unmatched`.
-6. **Audit Trail:** Every action is logged in an immutable audit trail.
-7. **Cash Position:** The updated, reconciled cash position is displayed in real-time.
+## Step-by-Step Demo Guide
+To perfectly demonstrate ReconPilot (e.g. for a pitch or presentation), follow these steps:
+
+1. **Start Fresh:** Ensure your SQLite database (`backend/data/demo.db`) is reset to begin with 0 metrics and a baseline ₹1,00,000 cash position.
+2. **Upload Data:** Navigate to the Overview tab. Upload `bank.csv`, `invoices.csv`, and `gl.csv` (provided in the `demo/` folder) and click **Start Reconciliation Process**.
+3. **Observe Automatic Reconciliation:** The dashboard will immediately populate showing the deterministic engine's work (e.g., 77 automatic decisions, zero false matches).
+4. **Review Exceptions:** Navigate to the **Exceptions** tab. Open case `B-2026-077`. Highlight to your audience how closely the competing fuzzy match scores compare and why determinism safely failed.
+5. **Showcase AI Advisory:** Scroll down to the Gemini Advisory panel. Show how Gemini analyzes the evidence and recommends a match, *but* point out the case remains strictly locked in `needs_human_review`.
+6. **Human Approval:** Click **Approve**. Explain that the AI advises, but the human decides. 
+7. **Audit Trail & Cash Position:** Navigate to the **Audit Trail** to show the immutable log of the approval. Then, return to the **Overview** to show how the successfully reconciled cash instantly updates the live Cash Position.
 
 ## API Overview
 * `GET /api/health` - Check backend health.
